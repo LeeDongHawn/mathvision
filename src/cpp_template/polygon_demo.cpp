@@ -1,5 +1,6 @@
 #include "polygon_demo.hpp"
 #include "opencv2/imgproc.hpp"
+#include <opencv2/opencv.hpp>
 
 using namespace std;
 using namespace cv;
@@ -114,7 +115,25 @@ void PolygonDemo::refreshWindow()
 // return the area of polygon
 int PolygonDemo::polyArea(const std::vector<cv::Point>& vtx)
 {
-    return 0;
+
+	int i = 1;
+	int s = 0;
+
+	//cal area
+	for (i; i < vtx.size() - 1; i++) {
+
+		s = s + (((vtx[i].x - vtx[0].x) * (vtx[i + 1].y - vtx[0].y)) - ((vtx[i + 1].x - vtx[0].x) *  (vtx[i].y - vtx[0].y))) / 2;
+		//printf("(%d-%d)*(%d-%d) - (%d-%d)*(%d-%d)\n", vtx[i].x, vtx[0].x, vtx[i + 1].y, vtx[0].y, vtx[i + 1].x, vtx[0].x, vtx[i].y, vtx[0].y);
+		//printf("%d*%d - %d*%d\n", vtx[i].x - vtx[0].x, vtx[i + 1].y - vtx[0].y, vtx[i + 1].x - vtx[0].x, vtx[i].y - vtx[0].y);
+		//printf("%d - %d = %d\n", (vtx[i].x - vtx[0].x) * (vtx[i + 1].y - vtx[0].y), (vtx[i + 1].x - vtx[0].x) *  (vtx[i].y - vtx[0].y),
+		//	(vtx[i].x - vtx[0].x) * (vtx[i + 1].y - vtx[0].y) - (vtx[i + 1].x - vtx[0].x) *  (vtx[i].y - vtx[0].y));
+		//printf("result/2=%d\n", (((vtx[i].x - vtx[0].x) * (vtx[i + 1].y - vtx[0].y)) - ((vtx[i + 1].x - vtx[0].x) *  (vtx[i].y - vtx[0].y))) / 2);
+	}
+
+
+	//make abs
+	return abs(s);
+
 }
 
 // return true if pt is interior point
@@ -123,12 +142,81 @@ bool PolygonDemo::ptInPolygon(const std::vector<cv::Point>& vtx, Point pt)
     return false;
 }
 
+
 // return homography type: NORMAL, CONCAVE, TWIST, REFLECTION, CONCAVE_REFLECTION
 int PolygonDemo::classifyHomography(const std::vector<cv::Point>& pts1, const std::vector<cv::Point>& pts2)
 {
-    if (pts1.size() != 4 || pts2.size() != 4) return -1;
+    //point size must 4 (x0,y0) (x1,y1) (x2,y2) (x3,y3)
+	if (pts1.size() != 4 || pts2.size() != 4) return -1;
 
-    return NORMAL;
+	//print(pts1);
+	//printf("\n");
+	//print(pts2);
+	//print("\n");
+	Mat H = findHomography(pts2, pts1, RANSAC);
+	
+	print(H);
+	printf("\n");
+
+	/*
+	for (int i = 0; i < 3; i++) {
+		for (int j = 0; j < 3; j++) {
+			printf("%lf\n", H.at<double>(i, j));
+		}
+	}
+	*/
+
+	//D = h1h5 - h2h4
+	double D = (H.at<double>(0, 0)*H.at<double>(1, 1)) - (H.at<double>(0, 1)*H.at <double>(1, 0));
+
+	//case : normal
+	if (D > 0){
+		printf("%lf*%lf - %lf*%lf = %lf\n", H.at<double>(0, 0), H.at<double>(1, 1), H.at<double>(0, 1), H.at <double>(1, 0),
+			(H.at<double>(0, 0)*H.at<double>(1, 1)) - (H.at<double>(0, 1)*H.at <double>(1, 0)));
+		return NORMAL;
+	}
+
+	else {
+		//check reflection R = root(h7*h7+h8*h8)
+		double R;
+		R = sqrt(pow(H.at<double>(2, 0),2)+pow(H.at<double>(2,1),2));
+
+		//check concave c1 
+		//AB X AD
+		double C1 = ((pts2[1].x - pts2[0].x)*(pts2[1].y - pts2[0].y)) - ((pts2[3].x - pts2[0].x)*(pts2[3].y - pts2[0].y));
+		//BA X BC
+		double C2 = ((pts2[0].x - pts2[1].x*(pts2[0].y - pts2[1].y)) - (pts2[2].x - pts2[1].x)*(pts2[2].y - pts2[1].y));
+		//CB X CD
+		double C3 = ((pts2[1].x - pts2[2].x*(pts2[1].y - pts2[2].y)) - (pts2[3].x - pts2[2].x)*(pts2[3].y - pts2[2].y));
+		//DC X DA
+		double C4 = ((pts2[2].x - pts2[3].x*(pts2[2].y - pts2[3].y)) - (pts2[0].x - pts2[3].x)*(pts2[0].y - pts2[3].y));
+
+		if (C1 < 0 | C2 < 0 | C3 < 0 | C4 < 0) {
+			printf("D : %lf, C1 : %lf, C2 : %lf, C3 : %lf, C4 : %lf\n", D, C1, C2, C3, C4);
+			return CONCAVE;
+
+			if (R == 0) {
+				printf("D : %lf, C1 : %lf, C2 : %lf, C3 : %lf, C4 : %lf\n", D, C1, C2, C3, C4);
+				return CONCAVE_REFLECTION;
+			}
+		}
+
+		if (R == 0) {
+			printf("D : %lf, R : %lf\n", D, R);
+			return REFLECTION;
+		}
+		else {
+			printf("%D : %lf, R : %lf\n", D, R);
+			return TWIST;
+		}
+
+
+
+
+
+		return CONCAVE;
+	}
+
 }
 
 // estimate a circle that best approximates the input points and return center and radius of the estimate circle
